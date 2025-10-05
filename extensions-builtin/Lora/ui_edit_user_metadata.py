@@ -54,14 +54,22 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
         self.taginfo = None
         self.edit_activation_text = None
         self.slider_preferred_weight = None
+        # --- ▼ ここから追加 ▼ ---
+        self.additional_weight = None
+        # --- ▲ ここまで追加 ▲ ---
         self.edit_notes = None
 
-    def save_lora_user_metadata(self, name, desc, sd_version, activation_text, preferred_weight, negative_text, notes):
+        # --- ▼ ここにadditional_weightを追加 ▼ ---
+    def save_lora_user_metadata(self, name, desc, sd_version, activation_text, preferred_weight, additional_weight, negative_text, notes):
+        # --- ▲ ここにadditional_weightを追加 ▲ ---
         user_metadata = self.get_user_metadata(name)
         user_metadata["description"] = desc
         user_metadata["sd version"] = sd_version
         user_metadata["activation text"] = activation_text
         user_metadata["preferred weight"] = preferred_weight
+        # --- ▼ ここから追加 ▼ ---
+        user_metadata["additional weight"] = additional_weight
+        # --- ▲ ここまで追加 ▲ ---
         user_metadata["negative text"] = negative_text
         user_metadata["notes"] = notes
 
@@ -130,6 +138,9 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
             gr.HighlightedText.update(value=gradio_tags, visible=True if tags else False),
             user_metadata.get('activation text', ''),
             float(user_metadata.get('preferred weight', 0.0)),
+            # --- ▼ ここから追加 ▼ ---
+            user_metadata.get('additional weight', ''),
+            # --- ▲ ここまで追加 ▲ ---
             user_metadata.get('negative text', ''),
             gr.update(visible=True if tags else False),
             gr.update(value=self.generate_random_prompt_from_tags(tags), visible=True if tags else False),
@@ -168,6 +179,9 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
         self.taginfo = gr.HighlightedText(label="Training dataset tags")
         self.edit_activation_text = gr.Text(label='Activation text', info="Will be added to prompt along with Lora")
         self.slider_preferred_weight = gr.Slider(label='Preferred weight', info="Set to 0 to disable", minimum=0.0, maximum=2.0, step=0.01)
+        # --- ▼ ここから追加 ▼ ---
+        self.edit_additional_weight = gr.Textbox(label="Additional weight", info="for LoRA Block Weight")
+        # --- ▲ ここまで追加 ▲ --
         self.edit_negative_text = gr.Text(label='Negative prompt', info="Will be added to negative prompts")
         with gr.Row() as row_random_prompt:
             with gr.Column(scale=8):
@@ -204,6 +218,9 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
             self.taginfo,
             self.edit_activation_text,
             self.slider_preferred_weight,
+            # --- ▼ ここから追加 ▼ ---
+            self.edit_additional_weight,
+            # --- ▲ ここまで追加 ▲ ---
             self.edit_negative_text,
             row_random_prompt,
             random_prompt,
@@ -218,6 +235,9 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
             self.select_sd_version,
             self.edit_activation_text,
             self.slider_preferred_weight,
+            # --- ▼ ここから追加 ▼ ---
+            self.edit_additional_weight,
+            # --- ▲ ここまで追加 ▲ ---
             self.edit_negative_text,
             self.edit_notes,
         ]

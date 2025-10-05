@@ -45,6 +45,17 @@ class ExtraNetworksPageLora(ui_extra_networks.ExtraNetworksPage):
         preferred_weight = item["user_metadata"].get("preferred weight", 0.0)
         item["prompt"] = quote_js(f"<lora:{alias}:") + " + " + (str(preferred_weight) if preferred_weight else "opts.extra_networks_default_multiplier") + " + " + quote_js(">")
 
+        # --- ▼ ここから追加 ▼ ---
+        additional_weight = item["user_metadata"].get("additional weight")
+
+        prompt = quote_js(f"<lora:{alias}:") + " + " + (str(preferred_weight) if preferred_weight else "opts.extra_networks_default_multiplier")
+
+        if additional_weight:
+            prompt += " + " + quote_js(f":lbw={additional_weight}")
+
+        item["prompt"] = prompt + " + " + quote_js(">")
+        # --- ▲ ここまで追加 ▲ ---
+
         if activation_text:
             item["prompt"] += " + " + quote_js(" " + activation_text)
 
