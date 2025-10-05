@@ -201,11 +201,14 @@ function setupExtraNetworks() {
     setupExtraNetworksForTab('img2img');
 }
 
-var re_extranet = /<([^:^>]+:[^:]+):[\d.]+>(.*)/;
-var re_extranet_g = /<([^:^>]+:[^:]+):[\d.]+>/g;
+// --- ▼ 末尾に(?::[^>]+)?を追加 ▼ ---
+var re_extranet = /<([^:^>]+:[^:]+):[\d.]+(?::[^>]+)?>(.*)/;
+var re_extranet_g = /<([^:^>]+:[^:]+):[\d.]+(?::[^>]+)?>/g;
 
-var re_extranet_neg = /\(([^:^>]+:[\d.]+)\)/;
-var re_extranet_g_neg = /\(([^:^>]+:[\d.]+)\)/g;
+var re_extranet_neg = /\(([^:^>]+:[\d.]+(?::[^)]+)?)\)/;
+var re_extranet_g_neg = /\(([^:^>]+:[\d.]+(?::[^)]+)?)\)/g;
+// --- ▲ 末尾に(?::[^>]+)?を追加 ▲ ---
+
 function tryToRemoveExtraNetworkFromPrompt(textarea, text, isNeg) {
     var m = text.match(isNeg ? re_extranet_neg : re_extranet);
     var replaced = false;
