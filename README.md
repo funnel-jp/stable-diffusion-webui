@@ -10,7 +10,7 @@ ui_edit_user_metadata.py（stable-diffusion-webui/extensions-builtin/Lora/）
 
 extraNetworks.js（stable-diffusion-webui/javascript/）
 
-###導入方法
+## 導入方法
 既存のstable-diffusion-webuiのフォルダで以下のコマンドを順番に実行してください。
 
 git remote add fork_lora_block_weight https://github.com/funnel-jp/stable-diffusion-webui.git
@@ -24,3 +24,4 @@ git checkout fork_lora_block_weight/master -- extensions-builtin/Lora/ui_extra_n
 git fetch origin
 
 git checkout origin/master -- extensions-builtin/Lora/ui_extra_networks_lora.py extensions-builtin/Lora/ui_edit_user_metadata.py javascript/extraNetworks.js
+
