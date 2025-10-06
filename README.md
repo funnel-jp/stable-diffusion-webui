@@ -25,3 +25,5 @@ git fetch origin
 
 git checkout origin/master -- extensions-builtin/Lora/ui_extra_networks_lora.py extensions-builtin/Lora/ui_edit_user_metadata.py javascript/extraNetworks.js
 
+## 使い方"
+LoRAタブでモデルカードの設定を開くとadditional weight欄が追加されています。この欄にALLや1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0 のように入力して保存するとjsonファイルに"additional weight"が記録されます。この状態でLoRAを呼び出すとプロンプトに自動で:lbw="additional weight"が追加されます。
