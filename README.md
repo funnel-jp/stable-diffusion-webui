@@ -31,5 +31,7 @@ git checkout origin/master -- extensions-builtin/Lora/ui_extra_networks_lora.py 
 
 ## 使い方
 LoRAタブでモデルカードの設定を開くとadditional weight欄が追加されています。この欄にALLや1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0 のように入力して保存するとjsonファイルに"additional weight"が記録されます。この状態でLoRAを呼び出すとプロンプトに自動で:lbw="additional weight"が追加されます。
-xyzプロットのUIにSplit grids by batch sizeが追加されているので、これを有効にするとバッチサイズを2以上にした際の動作が変更されます。
+
+xyzプロットのUIにSplit grids by batch sizeが追加されているので、これを有効にするとバッチサイズを2以上にした際の動作が変更され、バッチの数だけ個別のグリッド画像（Batch #1, Batch #2, ...）を生成します。また、Legend for Zをオフにすると、邪魔なBatch #Xのラベルを非表示にして画像をより大きく表示できます。
+
 
