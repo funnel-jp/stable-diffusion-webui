@@ -10,14 +10,18 @@ ui_edit_user_metadata.py（stable-diffusion-webui/extensions-builtin/Lora/）
 
 extraNetworks.js（stable-diffusion-webui/javascript/）
 
+xyzプロットで、バッチサイズを上げた際に巨大なグリッドではなく、バッチ数分のグリッドを分割して作成するようにした。
+
+xyz_grid.py（stable-diffusion-webui/scripts/）
+
 ## 導入方法
 既存のstable-diffusion-webuiのフォルダで以下のコマンドを順番に実行してください。
 
 git remote add fork_lora_block_weight https://github.com/funnel-jp/stable-diffusion-webui.git
 
-git fetch fork_lora_block_weight
+git fetch fork_funnel
 
-git checkout fork_lora_block_weight/master -- extensions-builtin/Lora/ui_extra_networks_lora.py extensions-builtin/Lora/ui_edit_user_metadata.py javascript/extraNetworks.js
+git checkout fork_funnel/master -- extensions-builtin/Lora/ui_extra_networks_lora.py extensions-builtin/Lora/ui_edit_user_metadata.py javascript/extraNetworks.js scripts/xyz_grid.py
 
 元に戻すときは
 
@@ -25,5 +29,7 @@ git fetch origin
 
 git checkout origin/master -- extensions-builtin/Lora/ui_extra_networks_lora.py extensions-builtin/Lora/ui_edit_user_metadata.py javascript/extraNetworks.js
 
-## 使い方"
+## 使い方
 LoRAタブでモデルカードの設定を開くとadditional weight欄が追加されています。この欄にALLや1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0 のように入力して保存するとjsonファイルに"additional weight"が記録されます。この状態でLoRAを呼び出すとプロンプトに自動で:lbw="additional weight"が追加されます。
+xyzプロットのUIにSplit grids by batch sizeが追加されているので、これを有効にするとバッチサイズを2以上にした際の動作が変更されます。
+
