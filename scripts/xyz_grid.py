@@ -20,7 +20,7 @@ import modules.sd_models
 import modules.sd_vae
 import re
 
-from modules.ui_components import ToolButton
+from modules.ui_components import ToolButton, InputAccordion
 
 fill_values_symbol = "\U0001f4d2"  # 📒
 
@@ -259,6 +259,7 @@ axis_options = [
     AxisOption("Schedule min sigma", float, apply_override("sigma_min")),
     AxisOption("Schedule max sigma", float, apply_override("sigma_max")),
     AxisOption("Schedule rho", float, apply_override("rho")),
+    AxisOption("Skip Early CFG", float, apply_override('skip_early_cond')),
     AxisOption("Beta schedule alpha", float, apply_override("beta_dist_alpha")),
     AxisOption("Beta schedule beta", float, apply_override("beta_dist_beta")),
     AxisOption("Eta", float, apply_field("eta")),
@@ -284,7 +285,7 @@ axis_options = [
 ]
 
 
-def draw_xyz_grid(p, xs, ys, zs, x_labels, y_labels, z_labels, cell, draw_legend, include_lone_images, include_sub_grids, first_axes_processed, second_axes_processed, margin_size):
+def draw_xyz_grid(p, xs, ys, zs, x_labels, y_labels, z_labels, cell, draw_legend, include_lone_images, include_sub_grids, first_axes_processed, second_axes_processed, margin_size, draw_grid):
     hor_texts = [[images.GridAnnotation(x)] for x in x_labels]
     ver_texts = [[images.GridAnnotation(y)] for y in y_labels]
     title_texts = [[images.GridAnnotation(z)] for z in z_labels]
@@ -306,7 +307,6 @@ def draw_xyz_grid(p, xs, ys, zs, x_labels, y_labels, z_labels, cell, draw_legend
         processed: Processed = cell(x, y, z, ix, iy, iz)
 
         if processed_result is None:
-            # Use our first processed result object as a template container to hold our full results
             processed_result = copy(processed)
             processed_result.images = [None] * list_size
             processed_result.all_prompts = [None] * list_size
@@ -316,7 +316,6 @@ def draw_xyz_grid(p, xs, ys, zs, x_labels, y_labels, z_labels, cell, draw_legend
 
         idx = index(ix, iy, iz)
         if processed.images:
-            # Non-empty list indicates some degree of success.
             processed_result.images[idx] = processed.images[0]
             processed_result.all_prompts[idx] = processed.prompt
             processed_result.all_seeds[idx] = processed.seed
@@ -326,7 +325,6 @@ def draw_xyz_grid(p, xs, ys, zs, x_labels, y_labels, z_labels, cell, draw_legend
             cell_size = (processed_result.width, processed_result.height)
             if processed_result.images[0] is not None:
                 cell_mode = processed_result.images[0].mode
-                # This corrects size in case of batches:
                 cell_size = processed_result.images[0].size
             processed_result.images[idx] = Image.new(cell_mode, cell_size)
 
@@ -362,39 +360,159 @@ def draw_xyz_grid(p, xs, ys, zs, x_labels, y_labels, z_labels, cell, draw_legend
                         process_cell(x, y, z, ix, iy, iz)
 
     if not processed_result:
-        # Should never happen, I've only seen it on one of four open tabs and it needed to refresh.
         print("Unexpected error: Processing could not begin, you may need to refresh the tab or restart the service.")
         return Processed(p, [])
     elif not any(processed_result.images):
         print("Unexpected error: draw_xyz_grid failed to return even a single processed image")
         return Processed(p, [])
 
-    z_count = len(zs)
+    if draw_grid:
+        z_count = len(zs)
 
-    for i in range(z_count):
-        start_index = (i * len(xs) * len(ys)) + i
-        end_index = start_index + len(xs) * len(ys)
-        grid = images.image_grid(processed_result.images[start_index:end_index], rows=len(ys))
+        for i in range(z_count):
+            start_index = (i * len(xs) * len(ys)) + i
+            end_index = start_index + len(xs) * len(ys)
+            grid = images.image_grid(processed_result.images[start_index:end_index], rows=len(ys))
+            if draw_legend:
+                grid_max_w, grid_max_h = map(max, zip(*(img.size for img in processed_result.images[start_index:end_index])))
+                grid = images.draw_grid_annotations(grid, grid_max_w, grid_max_h, hor_texts, ver_texts, margin_size)
+            processed_result.images.insert(i, grid)
+            processed_result.all_prompts.insert(i, processed_result.all_prompts[start_index])
+            processed_result.all_seeds.insert(i, processed_result.all_seeds[start_index])
+            processed_result.infotexts.insert(i, processed_result.infotexts[start_index])
+
+        z_grid = images.image_grid(processed_result.images[:z_count], rows=1)
+        z_sub_grid_max_w, z_sub_grid_max_h = map(max, zip(*(img.size for img in processed_result.images[:z_count])))
         if draw_legend:
-            grid_max_w, grid_max_h = map(max, zip(*(img.size for img in processed_result.images[start_index:end_index])))
-            grid = images.draw_grid_annotations(grid, grid_max_w, grid_max_h, hor_texts, ver_texts, margin_size)
-        processed_result.images.insert(i, grid)
-        processed_result.all_prompts.insert(i, processed_result.all_prompts[start_index])
-        processed_result.all_seeds.insert(i, processed_result.all_seeds[start_index])
-        processed_result.infotexts.insert(i, processed_result.infotexts[start_index])
-
-    z_grid = images.image_grid(processed_result.images[:z_count], rows=1)
-    z_sub_grid_max_w, z_sub_grid_max_h = map(max, zip(*(img.size for img in processed_result.images[:z_count])))
-    if draw_legend:
-        z_grid = images.draw_grid_annotations(z_grid, z_sub_grid_max_w, z_sub_grid_max_h, title_texts, [[images.GridAnnotation()]])
-    processed_result.images.insert(0, z_grid)
-    # TODO: Deeper aspects of the program rely on grid info being misaligned between metadata arrays, which is not ideal.
-    # processed_result.all_prompts.insert(0, processed_result.all_prompts[0])
-    # processed_result.all_seeds.insert(0, processed_result.all_seeds[0])
-    processed_result.infotexts.insert(0, processed_result.infotexts[0])
+            z_grid = images.draw_grid_annotations(z_grid, z_sub_grid_max_w, z_sub_grid_max_h, title_texts, [[images.GridAnnotation()]])
+        processed_result.images.insert(0, z_grid)
+        processed_result.infotexts.insert(0, processed_result.infotexts[0])
 
     return processed_result
 
+def draw_xyz_grid_split_by_batch(p, xs, ys, zs, x_labels, y_labels, z_labels, cell, margin_size, draw_legend_x, draw_legend_y, draw_legend_z):
+    """
+    Processes a grid of images, but creates N separate grids based on a batch size of N.
+    The first grid will contain the 1st image of each batch, the second grid will contain the 2nd, etc.
+    This function avoids creating intermediate grid images for each cell.
+    """
+    batch_size = p.batch_size
+    images_per_grid = len(xs) * len(ys) * len(zs)
+    
+    state.job_count = images_per_grid * p.n_iter
+
+    processed_template = None
+    batch_processed_results = []
+
+    for iz, z in enumerate(zs):
+        for iy, y in enumerate(ys):
+            for ix, x in enumerate(xs):
+                state.job = f"{ix + iy * len(xs) + iz * len(xs) * len(ys) + 1} out of {images_per_grid}"
+                
+                processed_cell_result = cell(x, y, z, ix, iy, iz)
+
+                if processed_template is None:
+                    if not processed_cell_result.images or len(processed_cell_result.images) < 2:
+                        raise RuntimeError(f"The first cell failed to produce a batch of images. Expected at least 2 images (grid + 1), but got {len(processed_cell_result.images)}.")
+                    
+                    processed_template = copy(processed_cell_result)
+                    
+                    single_image_mode = processed_template.images[1].mode
+                    single_image_size = processed_template.images[1].size
+                    
+                    for i in range(batch_size):
+                        res = copy(processed_template)
+                        res.images = [Image.new(single_image_mode, single_image_size)] * images_per_grid
+                        res.all_prompts = [""] * images_per_grid
+                        res.all_negative_prompts = [""] * images_per_grid
+                        res.all_seeds = [-1] * images_per_grid
+                        res.all_subseeds = [-1] * images_per_grid
+                        res.infotexts = [""] * images_per_grid
+                        batch_processed_results.append(res)
+
+                if processed_cell_result.images:
+                    grid_index = ix + iy * len(xs) + iz * len(xs) * len(ys)
+                    
+                    individual_images = processed_cell_result.images[1:]
+                    
+                    for i in range(batch_size):
+                        if i < len(individual_images):
+                            batch_processed_results[i].images[grid_index] = individual_images[i]
+                            batch_processed_results[i].all_prompts[grid_index] = processed_cell_result.prompt
+                            batch_processed_results[i].all_seeds[grid_index] = processed_cell_result.all_seeds[i]
+                            batch_processed_results[i].infotexts[grid_index] = processed_cell_result.infotexts[i]
+                            if i < len(processed_cell_result.all_negative_prompts):
+                                batch_processed_results[i].all_negative_prompts[grid_index] = processed_cell_result.all_negative_prompts[i]
+                            if i < len(processed_cell_result.all_subseeds):
+                                batch_processed_results[i].all_subseeds[grid_index] = processed_cell_result.all_subseeds[i]
+
+    final_images = []
+    final_prompts = []
+    final_seeds = []
+    final_infotexts = []
+
+    for i, res in enumerate(batch_processed_results):
+        valid_images = [img for img in res.images if img is not None]
+        if not valid_images:
+            continue
+
+        if len(zs) > 1:
+            z_grids = []
+            images_per_z_slice = len(xs) * len(ys)
+            for iz in range(len(zs)):
+                start = iz * images_per_z_slice
+                end = start + images_per_z_slice
+                sub_grid = images.image_grid(res.images[start:end], rows=len(ys))
+                
+                if draw_legend_x or draw_legend_y:
+                    hor_texts = [[images.GridAnnotation(x)] for x in x_labels] if draw_legend_x else [[images.GridAnnotation()]] * len(x_labels)
+                    ver_texts = [[images.GridAnnotation(y)] for y in y_labels] if draw_legend_y else [[images.GridAnnotation()]] * len(y_labels)
+                    valid_sub_images = [img for img in res.images[start:end] if img is not None]
+                    if valid_sub_images:
+                        grid_max_w, grid_max_h = map(max, zip(*(img.size for img in valid_sub_images)))
+                        sub_grid = images.draw_grid_annotations(sub_grid, grid_max_w, grid_max_h, hor_texts, ver_texts, margin_size)
+                z_grids.append(sub_grid)
+            
+            grid = images.image_grid(z_grids, rows=1)
+
+            if draw_legend_z:
+                z_texts = [[images.GridAnnotation(z)] for z in z_labels]
+                batch_texts = [[images.GridAnnotation(f"Batch #{i+1}")]] 
+                valid_z_grids = [img for img in z_grids if img is not None]
+                if valid_z_grids:
+                    grid_max_w, grid_max_h = map(max, zip(*(img.size for img in valid_z_grids)))
+                    grid = images.draw_grid_annotations(grid, grid_max_w, grid_max_h, z_texts, batch_texts)
+
+        else:
+            grid = images.image_grid(res.images, rows=len(ys))
+            if draw_legend_x or draw_legend_y:
+                hor_texts = [[images.GridAnnotation(x)] for x in x_labels] if draw_legend_x else [[images.GridAnnotation()]] * len(x_labels)
+                ver_texts = [[images.GridAnnotation(y)] for y in y_labels] if draw_legend_y else [[images.GridAnnotation()]] * len(y_labels)
+                grid_max_w, grid_max_h = map(max, zip(*(img.size for img in valid_images)))
+                grid = images.draw_grid_annotations(grid, grid_max_w, grid_max_h, hor_texts, ver_texts, margin_size)
+        
+        final_images.append(grid)
+        final_prompts.append(res.all_prompts[0])
+        final_seeds.append(res.all_seeds[0])
+        
+        info_p = copy(p)
+        info_p.extra_generation_params = copy(p.extra_generation_params)
+        info_p.extra_generation_params["Batch grid index"] = i + 1
+        info_p.extra_generation_params["Batch grid total"] = batch_size
+        
+        final_infotexts.append(processing.create_infotext(info_p, [res.all_prompts[0]], [res.all_seeds[0]], [res.all_subseeds[0]], all_negative_prompts=[res.all_negative_prompts[0]]))
+
+    if not final_images:
+        return Processed(p, [])
+
+    final_processed = processed_template
+    final_processed.images = final_images
+    final_processed.all_prompts = final_prompts
+    final_processed.all_seeds = final_seeds
+    final_processed.infotexts = final_infotexts
+    final_processed.index_of_first_image = 0
+
+    return final_processed
 
 class SharedSettingsStackHelper(object):
     def __enter__(self):
@@ -441,7 +559,6 @@ class Script(scripts.Script):
 
         with gr.Row(variant="compact", elem_id="axis_options"):
             with gr.Column():
-                draw_legend = gr.Checkbox(label='Draw legend', value=True, elem_id=self.elem_id("draw_legend"))
                 no_fixed_seeds = gr.Checkbox(label='Keep -1 for seeds', value=False, elem_id=self.elem_id("no_fixed_seeds"))
                 with gr.Row():
                     vary_seeds_x = gr.Checkbox(label='Vary seeds for X', value=False, min_width=80, elem_id=self.elem_id("vary_seeds_x"), tooltip="Use different seeds for images along X axis.")
@@ -449,10 +566,18 @@ class Script(scripts.Script):
                     vary_seeds_z = gr.Checkbox(label='Vary seeds for Z', value=False, min_width=80, elem_id=self.elem_id("vary_seeds_z"), tooltip="Use different seeds for images along Z axis.")
             with gr.Column():
                 include_lone_images = gr.Checkbox(label='Include Sub Images', value=False, elem_id=self.elem_id("include_lone_images"))
-                include_sub_grids = gr.Checkbox(label='Include Sub Grids', value=False, elem_id=self.elem_id("include_sub_grids"))
                 csv_mode = gr.Checkbox(label='Use text inputs instead of dropdowns', value=False, elem_id=self.elem_id("csv_mode"))
-            with gr.Column():
+                split_grids_by_batch = gr.Checkbox(label='Split grids by batch size', value=False, elem_id=self.elem_id("split_grids_by_batch"), tooltip="Instead of one grid, create N grids for batch size N.")
+
+        with InputAccordion(True, label='Draw grid', elem_id=self.elem_id('draw_grid')) as draw_grid:
+            with gr.Row():
+                include_sub_grids = gr.Checkbox(label='Include Sub Grids', value=False, elem_id=self.elem_id("include_sub_grids"))
                 margin_size = gr.Slider(label="Grid margins (px)", minimum=0, maximum=500, value=0, step=2, elem_id=self.elem_id("margin_size"))
+
+            with gr.Row(elem_id="legend_options"):
+                draw_legend_x = gr.Checkbox(label='Legend for X', value=True, elem_id=self.elem_id("draw_legend_x"))
+                draw_legend_y = gr.Checkbox(label='Legend for Y', value=True, elem_id=self.elem_id("draw_legend_y"))
+                draw_legend_z = gr.Checkbox(label='Legend for Z', value=True, elem_id=self.elem_id("draw_legend_z"))
 
         with gr.Row(variant="compact", elem_id="swap_axes"):
             swap_xy_axes_button = gr.Button(value="Swap X/Y axes", elem_id="xy_grid_swap_axes_button")
@@ -484,7 +609,7 @@ class Script(scripts.Script):
         fill_z_button.click(fn=fill, inputs=[z_type, csv_mode], outputs=[z_values, z_values_dropdown])
 
         def select_axis(axis_type, axis_values, axis_values_dropdown, csv_mode):
-            axis_type = axis_type or 0  # if axle type is None set to 0
+            axis_type = axis_type or 0
 
             choices = self.current_axis_options[axis_type].choices
             has_choices = choices is not None
@@ -533,10 +658,10 @@ class Script(scripts.Script):
             (z_values_dropdown, lambda params: get_dropdown_update_from_params("Z", params)),
         )
 
-        return [x_type, x_values, x_values_dropdown, y_type, y_values, y_values_dropdown, z_type, z_values, z_values_dropdown, draw_legend, include_lone_images, include_sub_grids, no_fixed_seeds, vary_seeds_x, vary_seeds_y, vary_seeds_z, margin_size, csv_mode]
+        return [x_type, x_values, x_values_dropdown, y_type, y_values, y_values_dropdown, z_type, z_values, z_values_dropdown, include_lone_images, include_sub_grids, no_fixed_seeds, vary_seeds_x, vary_seeds_y, vary_seeds_z, margin_size, csv_mode, draw_grid, split_grids_by_batch, draw_legend_x, draw_legend_y, draw_legend_z]
 
-    def run(self, p, x_type, x_values, x_values_dropdown, y_type, y_values, y_values_dropdown, z_type, z_values, z_values_dropdown, draw_legend, include_lone_images, include_sub_grids, no_fixed_seeds, vary_seeds_x, vary_seeds_y, vary_seeds_z, margin_size, csv_mode):
-        x_type, y_type, z_type = x_type or 0, y_type or 0, z_type or 0  # if axle type is None set to 0
+    def run(self, p, x_type, x_values, x_values_dropdown, y_type, y_values, y_values_dropdown, z_type, z_values, z_values_dropdown, include_lone_images, include_sub_grids, no_fixed_seeds, vary_seeds_x, vary_seeds_y, vary_seeds_z, margin_size, csv_mode, draw_grid, split_grids_by_batch, draw_legend_x, draw_legend_y, draw_legend_z):
+        x_type, y_type, z_type = x_type or 0, y_type or 0, z_type or 0
 
         if not no_fixed_seeds:
             modules.processing.fix_seed(p)
@@ -557,61 +682,40 @@ class Script(scripts.Script):
 
             if opt.type == int:
                 valslist_ext = []
-
                 for val in valslist:
-                    if val.strip() == '':
-                        continue
+                    if val.strip() == '': continue
                     m = re_range.fullmatch(val)
                     mc = re_range_count.fullmatch(val)
                     if m is not None:
-                        start = int(m.group(1))
-                        end = int(m.group(2)) + 1
-                        step = int(m.group(3)) if m.group(3) is not None else 1
-
+                        start = int(m.group(1)); end = int(m.group(2)) + 1; step = int(m.group(3)) if m.group(3) is not None else 1
                         valslist_ext += list(range(start, end, step))
                     elif mc is not None:
-                        start = int(mc.group(1))
-                        end = int(mc.group(2))
-                        num = int(mc.group(3)) if mc.group(3) is not None else 1
-
+                        start = int(mc.group(1)); end = int(mc.group(2)); num = int(mc.group(3)) if mc.group(3) is not None else 1
                         valslist_ext += [int(x) for x in np.linspace(start=start, stop=end, num=num).tolist()]
                     else:
                         valslist_ext.append(val)
-
                 valslist = valslist_ext
             elif opt.type == float:
                 valslist_ext = []
-
                 for val in valslist:
-                    if val.strip() == '':
-                        continue
+                    if val.strip() == '': continue
                     m = re_range_float.fullmatch(val)
                     mc = re_range_count_float.fullmatch(val)
                     if m is not None:
-                        start = float(m.group(1))
-                        end = float(m.group(2))
-                        step = float(m.group(3)) if m.group(3) is not None else 1
-
+                        start = float(m.group(1)); end = float(m.group(2)); step = float(m.group(3)) if m.group(3) is not None else 1
                         valslist_ext += np.arange(start, end + step, step).tolist()
                     elif mc is not None:
-                        start = float(mc.group(1))
-                        end = float(mc.group(2))
-                        num = int(mc.group(3)) if mc.group(3) is not None else 1
-
+                        start = float(mc.group(1)); end = float(mc.group(2)); num = int(mc.group(3)) if mc.group(3) is not None else 1
                         valslist_ext += np.linspace(start=start, stop=end, num=num).tolist()
                     else:
                         valslist_ext.append(val)
-
                 valslist = valslist_ext
             elif opt.type == str_permutations:
                 valslist = list(permutations(valslist))
 
             valslist = [opt.type(x) for x in valslist]
-
-            # Confirm options are valid before starting
             if opt.confirm:
                 opt.confirm(p, valslist)
-
             return valslist
 
         x_opt = self.current_axis_options[x_type]
@@ -629,8 +733,7 @@ class Script(scripts.Script):
             z_values = list_to_csv_string(z_values_dropdown)
         zs = process_axis(z_opt, z_values, z_values_dropdown)
 
-        # this could be moved to common code, but unlikely to be ever triggered anywhere else
-        Image.MAX_IMAGE_PIXELS = None  # disable check in Pillow and rely on check below to allow large custom image sizes
+        Image.MAX_IMAGE_PIXELS = None
         grid_mp = round(len(xs) * len(ys) * len(zs) * p.width * p.height / 1000000)
         assert grid_mp < opts.img_max_size_mp, f'Error: Resulting grid would be too large ({grid_mp} MPixels) (max configured size is {opts.img_max_size_mp} MPixels)'
 
@@ -655,16 +758,11 @@ class Script(scripts.Script):
             total_steps = p.steps * len(xs) * len(ys) * len(zs)
 
         if isinstance(p, StableDiffusionProcessingTxt2Img) and p.enable_hr:
-            if x_opt.label == "Hires steps":
-                total_steps += sum(xs) * len(ys) * len(zs)
-            elif y_opt.label == "Hires steps":
-                total_steps += sum(ys) * len(xs) * len(zs)
-            elif z_opt.label == "Hires steps":
-                total_steps += sum(zs) * len(xs) * len(ys)
-            elif p.hr_second_pass_steps:
-                total_steps += p.hr_second_pass_steps * len(xs) * len(ys) * len(zs)
-            else:
-                total_steps *= 2
+            if x_opt.label == "Hires steps": total_steps += sum(xs) * len(ys) * len(zs)
+            elif y_opt.label == "Hires steps": total_steps += sum(ys) * len(xs) * len(zs)
+            elif z_opt.label == "Hires steps": total_steps += sum(zs) * len(xs) * len(ys)
+            elif p.hr_second_pass_steps: total_steps += p.hr_second_pass_steps * len(xs) * len(ys) * len(zs)
+            else: total_steps *= 2
 
         total_steps *= p.n_iter
 
@@ -678,140 +776,100 @@ class Script(scripts.Script):
         state.xyz_plot_y = AxisInfo(y_opt, ys)
         state.xyz_plot_z = AxisInfo(z_opt, zs)
 
-        # If one of the axes is very slow to change between (like SD model
-        # checkpoint), then make sure it is in the outer iteration of the nested
-        # `for` loop.
         first_axes_processed = 'z'
         second_axes_processed = 'y'
         if x_opt.cost > y_opt.cost and x_opt.cost > z_opt.cost:
             first_axes_processed = 'x'
-            if y_opt.cost > z_opt.cost:
-                second_axes_processed = 'y'
-            else:
-                second_axes_processed = 'z'
+            if y_opt.cost > z_opt.cost: second_axes_processed = 'y'
+            else: second_axes_processed = 'z'
         elif y_opt.cost > x_opt.cost and y_opt.cost > z_opt.cost:
             first_axes_processed = 'y'
-            if x_opt.cost > z_opt.cost:
-                second_axes_processed = 'x'
-            else:
-                second_axes_processed = 'z'
+            if x_opt.cost > z_opt.cost: second_axes_processed = 'x'
+            else: second_axes_processed = 'z'
         elif z_opt.cost > x_opt.cost and z_opt.cost > y_opt.cost:
             first_axes_processed = 'z'
-            if x_opt.cost > y_opt.cost:
-                second_axes_processed = 'x'
-            else:
-                second_axes_processed = 'y'
+            if x_opt.cost > y_opt.cost: second_axes_processed = 'x'
+            else: second_axes_processed = 'y'
 
         grid_infotext = [None] * (1 + len(zs))
 
         def cell(x, y, z, ix, iy, iz):
-            if shared.state.interrupted or state.stopping_generation:
-                return Processed(p, [], p.seed, "")
-
+            if shared.state.interrupted or state.stopping_generation: return Processed(p, [], p.seed, "")
             pc = copy(p)
             pc.styles = pc.styles[:]
             x_opt.apply(pc, x, xs)
             y_opt.apply(pc, y, ys)
             z_opt.apply(pc, z, zs)
-
             xdim = len(xs) if vary_seeds_x else 1
             ydim = len(ys) if vary_seeds_y else 1
-
-            if vary_seeds_x:
-                pc.seed += ix
-            if vary_seeds_y:
-                pc.seed += iy * xdim
-            if vary_seeds_z:
-                pc.seed += iz * xdim * ydim
-
+            if vary_seeds_x: pc.seed += ix
+            if vary_seeds_y: pc.seed += iy * xdim
+            if vary_seeds_z: pc.seed += iz * xdim * ydim
             try:
                 res = process_images(pc)
             except Exception as e:
                 errors.display(e, "generating image for xyz plot")
-
                 res = Processed(p, [], p.seed, "")
-
-            # Sets subgrid infotexts
             subgrid_index = 1 + iz
             if grid_infotext[subgrid_index] is None and ix == 0 and iy == 0:
                 pc.extra_generation_params = copy(pc.extra_generation_params)
                 pc.extra_generation_params['Script'] = self.title()
-
                 if x_opt.label != 'Nothing':
                     pc.extra_generation_params["X Type"] = x_opt.label
                     pc.extra_generation_params["X Values"] = x_values
-                    if x_opt.label in ["Seed", "Var. seed"] and not no_fixed_seeds:
-                        pc.extra_generation_params["Fixed X Values"] = ", ".join([str(x) for x in xs])
-
+                    if x_opt.label in ["Seed", "Var. seed"] and not no_fixed_seeds: pc.extra_generation_params["Fixed X Values"] = ", ".join([str(x) for x in xs])
                 if y_opt.label != 'Nothing':
                     pc.extra_generation_params["Y Type"] = y_opt.label
                     pc.extra_generation_params["Y Values"] = y_values
-                    if y_opt.label in ["Seed", "Var. seed"] and not no_fixed_seeds:
-                        pc.extra_generation_params["Fixed Y Values"] = ", ".join([str(y) for y in ys])
-
+                    if y_opt.label in ["Seed", "Var. seed"] and not no_fixed_seeds: pc.extra_generation_params["Fixed Y Values"] = ", ".join([str(y) for y in ys])
                 grid_infotext[subgrid_index] = processing.create_infotext(pc, pc.all_prompts, pc.all_seeds, pc.all_subseeds)
-
-            # Sets main grid infotext
             if grid_infotext[0] is None and ix == 0 and iy == 0 and iz == 0:
                 pc.extra_generation_params = copy(pc.extra_generation_params)
-
                 if z_opt.label != 'Nothing':
                     pc.extra_generation_params["Z Type"] = z_opt.label
                     pc.extra_generation_params["Z Values"] = z_values
-                    if z_opt.label in ["Seed", "Var. seed"] and not no_fixed_seeds:
-                        pc.extra_generation_params["Fixed Z Values"] = ", ".join([str(z) for z in zs])
-
+                    if z_opt.label in ["Seed", "Var. seed"] and not no_fixed_seeds: pc.extra_generation_params["Fixed Z Values"] = ", ".join([str(z) for z in zs])
                 grid_infotext[0] = processing.create_infotext(pc, pc.all_prompts, pc.all_seeds, pc.all_subseeds)
-
             return res
 
         with SharedSettingsStackHelper():
-            processed = draw_xyz_grid(
-                p,
-                xs=xs,
-                ys=ys,
-                zs=zs,
-                x_labels=[x_opt.format_value(p, x_opt, x) for x in xs],
-                y_labels=[y_opt.format_value(p, y_opt, y) for y in ys],
-                z_labels=[z_opt.format_value(p, z_opt, z) for z in zs],
-                cell=cell,
-                draw_legend=draw_legend,
-                include_lone_images=include_lone_images,
-                include_sub_grids=include_sub_grids,
-                first_axes_processed=first_axes_processed,
-                second_axes_processed=second_axes_processed,
-                margin_size=margin_size
-            )
+            if split_grids_by_batch and p.batch_size > 1:
+                p.override_settings['grid_save'] = False
+                processed = draw_xyz_grid_split_by_batch(p, xs=xs, ys=ys, zs=zs, x_labels=[x_opt.format_value(p, x_opt, x) for x in xs], y_labels=[y_opt.format_value(p, y_opt, y) for y in ys], z_labels=[z_opt.format_value(p, z_opt, z) for z in zs], cell=cell, margin_size=margin_size, draw_legend_x=draw_legend_x, draw_legend_y=draw_legend_y, draw_legend_z=draw_legend_z)
+                p.override_settings.pop('grid_save', None)
+                if not processed.images: return processed
+                if opts.grid_save:
+                    for i, grid_image in enumerate(processed.images):
+                        images.save_image(grid_image, p.outpath_grids, "xyz_grid", info=processed.infotexts[i], extension=opts.grid_format, prompt=processed.all_prompts[i], seed=processed.all_seeds[i], grid=True, p=p)
+                return processed
+            else:
+                draw_legend_for_original = draw_legend_x or draw_legend_y or draw_legend_z
+                processed = draw_xyz_grid(p, xs=xs, ys=ys, zs=zs, x_labels=[x_opt.format_value(p, x_opt, x) for x in xs], y_labels=[y_opt.format_value(p, y_opt, y) for y in ys], z_labels=[z_opt.format_value(p, z_opt, z) for z in zs], cell=cell, draw_legend=draw_legend_for_original, include_lone_images=include_lone_images, include_sub_grids=include_sub_grids, first_axes_processed=first_axes_processed, second_axes_processed=second_axes_processed, margin_size=margin_size, draw_grid=draw_grid)
 
         if not processed.images:
-            # It broke, no further handling needed.
             return processed
 
         z_count = len(zs)
-
-        # Set the grid infotexts to the real ones with extra_generation_params (1 main grid + z_count sub-grids)
-        processed.infotexts[:1 + z_count] = grid_infotext[:1 + z_count]
+        if draw_grid:
+            processed.infotexts[:1 + z_count] = grid_infotext[:1 + z_count]
 
         if not include_lone_images:
-            # Don't need sub-images anymore, drop from list:
-            processed.images = processed.images[:z_count + 1]
+            processed.images = processed.images[:z_count + 1] if draw_grid else []
 
-        if opts.grid_save:
-            # Auto-save main and sub-grids:
+        if draw_grid and opts.grid_save:
             grid_count = z_count + 1 if z_count > 1 else 1
             for g in range(grid_count):
-                # TODO: See previous comment about intentional data misalignment.
                 adj_g = g - 1 if g > 0 else g
                 images.save_image(processed.images[g], p.outpath_grids, "xyz_grid", info=processed.infotexts[g], extension=opts.grid_format, prompt=processed.all_prompts[adj_g], seed=processed.all_seeds[adj_g], grid=True, p=processed)
-                if not include_sub_grids:  # if not include_sub_grids then skip saving after the first grid
+                if not include_sub_grids:
                     break
 
-        if not include_sub_grids:
-            # Done with sub-grids, drop all related information:
-            for _ in range(z_count):
-                del processed.images[1]
-                del processed.all_prompts[1]
-                del processed.all_seeds[1]
-                del processed.infotexts[1]
-
+        if draw_grid and not include_sub_grids:
+            if z_count > 1:
+                for _ in range(z_count):
+                    if len(processed.images) > 1: del processed.images[1]
+                    if len(processed.all_prompts) > 1: del processed.all_prompts[1]
+                    if len(processed.all_seeds) > 1: del processed.all_seeds[1]
+                    if len(processed.infotexts) > 1: del processed.infotexts[1]
+        
         return processed
