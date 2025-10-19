@@ -1,5 +1,5 @@
 
-# (ここにリポジトリ名を入力) - Stable Diffusion WebUI カスタム版
+# Stable Diffusion WebUI カスタム版
 
 このリポジトリは、[AUTOMATIC1111/stable-diffusion-webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui) (本家) に対し、いくつかの利便性向上機能を追加した変更版です。
 
@@ -86,3 +86,4 @@ git switch funnel
 ```
 
 以上で導入は完了です。`webui.sh` または `webui.bat` を起動すると、上記の機能が適用された状態で使用できます。
+
